@@ -1,15 +1,19 @@
 {
   "dependencies": {
     "@strapi/plugin-graphql": "^4.0.0",
-    "@strapi/plugin-i18n": "4.9.0",
-    "@strapi/plugin-users-permissions": "4.9.0",
+    "@strapi/plugin-i18n": "4.25.19",
+    "@strapi/plugin-users-permissions": "4.25.19",
     "@strapi/provider-upload-cloudinary": "^4.9.1",
-    "@strapi/strapi": "4.9.0",
-    "better-sqlite3": "8.0.1",
+    "@strapi/strapi": "4.25.19",
+    "better-sqlite3": "11.8.1",
     "lodash.set": "^4.3.2",
     "mime-types": "^2.1.27",
     "pg": "^8.10.0",
-    "slugify": "^1.6.6"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^5.3.4",
+    "slugify": "^1.6.6",
+    "styled-components": "^5.3.11"
   },
   "name": "backend",
   "private": true,
