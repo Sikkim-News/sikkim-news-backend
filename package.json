@@ -23,7 +23,8 @@
     "develop": "strapi develop",
     "start": "strapi start",
     "build": "strapi build",
-    "strapi": "strapi"
+    "strapi": "strapi",
+    "sync:prod": "node scripts/sync-from-prod.js"
   },
   "author": {
     "name": "A Strapi developer"
