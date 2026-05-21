@@ -38,5 +38,8 @@
     "node": "22.x",
     "npm": ">=6.0.0"
   },
+  "optionalDependencies": {
+    "@swc/core-linux-x64-gnu": "1.10.9"
+  },
   "license": "MIT"
 }
