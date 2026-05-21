@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 'use strict';
 
+require('dotenv').config();
 const path = require('path');
+const DEFAULT_REMOTE_URL = 'https://sikkim-news-backend-p6i7o.ondigitalocean.app';
 
 function parseArgs(argv) {
   const out = {};
@@ -72,12 +74,24 @@ async function requestJsonAllow404(params) {
   }
 }
 
-async function fetchAllCollection({ baseUrl, token, endpoint, populateQuery = 'populate=*', pageSize = 100 }) {
+async function fetchAllCollection({
+  baseUrl,
+  token,
+  endpoint,
+  populateQuery = 'populate=*',
+  pageSize = 100,
+  extraQuery = 'publicationState=preview',
+}) {
   const items = [];
   let page = 1;
 
   while (true) {
-    const qs = `pagination[page]=${page}&pagination[pageSize]=${pageSize}&${populateQuery}`;
+    const qs = [
+      `pagination[page]=${page}`,
+      `pagination[pageSize]=${pageSize}`,
+      populateQuery,
+      extraQuery,
+    ].filter(Boolean).join('&');
     const url = joinUrl(baseUrl, `/api/${endpoint}?${qs}`);
     const json = await requestJson({ url, token });
 
@@ -90,6 +104,16 @@ async function fetchAllCollection({ baseUrl, token, endpoint, populateQuery = 'p
   }
 
   return items;
+}
+
+async function fetchAllCollectionAllow404(params) {
+  try {
+    return await fetchAllCollection(params);
+  } catch (err) {
+    const msg = err?.message || '';
+    if (msg.includes('failed (404)')) return [];
+    throw err;
+  }
 }
 
 async function fetchSingleType({ baseUrl, token, endpoint, populateQuery = 'populate=*' }) {
@@ -105,6 +129,11 @@ function mediaUrlFromAttributes(attrs, baseUrl) {
   return joinUrl(baseUrl, attrs.url);
 }
 
+// Normalizes Strapi v4 ({ attributes: {} }) and v5 (flat) response shapes
+function getAttrs(item) {
+  return item?.attributes ?? item ?? {};
+}
+
 function getRelationData(node) {
   if (!node) return null;
   return node.data ?? node;
@@ -113,6 +142,14 @@ function getRelationData(node) {
 function ensureArray(node) {
   if (!node) return [];
   return Array.isArray(node) ? node : [];
+}
+
+function relationItems(node) {
+  if (!node) return [];
+  if (Array.isArray(node?.data)) return node.data;
+  if (node?.data) return [node.data];
+  if (Array.isArray(node)) return node;
+  return [node];
 }
 
 function fileNameFromUrl(url, fallback = 'file') {
@@ -197,7 +234,7 @@ async function upsertCollectionByKey({
 }) {
   const localByKey = new Map();
   for (const item of localItems) {
-    const attrs = item?.attributes || {};
+    const attrs = getAttrs(item);
     const localKey = getLocalKey ? getLocalKey(item) : attrs[keyName];
     if (localKey) {
       localByKey.set(localKey, item);
@@ -219,8 +256,10 @@ async function upsertCollectionByKey({
     }
 
     if (existing) {
+      // Strapi v5 uses documentId in the URL; v4 uses integer id
+      const localId = existing.documentId || existing.id;
       await requestJson({
-        url: joinUrl(localBaseUrl, `/api/${endpoint}/${existing.id}`),
+        url: joinUrl(localBaseUrl, `/api/${endpoint}/${localId}`),
         method: 'PUT',
         token: localToken,
         body: { data: payload },
@@ -234,9 +273,10 @@ async function upsertCollectionByKey({
         body: { data: payload },
       });
       counters.created += 1;
-      const createdKey = getLocalKey ? getLocalKey(created?.data) : created?.data?.attributes?.[keyName];
+      const createdData = created?.data;
+      const createdKey = getLocalKey ? getLocalKey(createdData) : getAttrs(createdData)?.[keyName];
       if (createdKey) {
-        localByKey.set(createdKey, created.data);
+        localByKey.set(createdKey, createdData);
       }
     }
   }
@@ -245,7 +285,7 @@ async function upsertCollectionByKey({
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  const prodBaseUrl = normalizeBaseUrl(args['prod-url'] || process.env.PROD_STRAPI_URL);
+  const prodBaseUrl = normalizeBaseUrl(args['prod-url'] || process.env.PROD_STRAPI_URL || DEFAULT_REMOTE_URL);
   const localBaseUrl = normalizeBaseUrl(args['local-url'] || process.env.LOCAL_STRAPI_URL || 'http://localhost:1337');
   const prodToken = args['prod-token'] || process.env.PROD_STRAPI_TOKEN || '';
   const localToken = args['local-token'] || process.env.LOCAL_STRAPI_TOKEN || '';
@@ -274,25 +314,39 @@ async function main() {
     remoteCategories,
     remoteWriters,
     remoteArticles,
+    remoteYtVideos,
     remoteGlobal,
     remoteHomepage,
   ] = await Promise.all([
     fetchAllCollection({ baseUrl: prodBaseUrl, token: prodToken, endpoint: 'categories', populateQuery: 'populate=*' }),
     fetchAllCollection({ baseUrl: prodBaseUrl, token: prodToken, endpoint: 'writers', populateQuery: 'populate=*' }),
-    fetchAllCollection({ baseUrl: prodBaseUrl, token: prodToken, endpoint: 'articles', populateQuery: 'populate=*' }),
+    fetchAllCollection({
+      baseUrl: prodBaseUrl,
+      token: prodToken,
+      endpoint: 'articles',
+      populateQuery: [
+        'populate[categories]=true',
+        'populate[author]=true',
+        'populate[image]=true',
+        'populate[coverImage][populate]=image',
+        'populate[otherImages][populate]=image',
+      ].join('&'),
+    }),
+    fetchAllCollectionAllow404({ baseUrl: prodBaseUrl, token: prodToken, endpoint: 'ytvideos', populateQuery: 'populate=*' }),
     fetchSingleType({ baseUrl: prodBaseUrl, token: prodToken, endpoint: 'global', populateQuery: 'populate=*' }),
     fetchSingleType({ baseUrl: prodBaseUrl, token: prodToken, endpoint: 'homepage', populateQuery: 'populate=*' }),
   ]);
 
-  const [localCategories, localWriters, localArticles] = await Promise.all([
+  const [localCategories, localWriters, localArticles, localYtVideos] = await Promise.all([
     fetchAllCollection({ baseUrl: localBaseUrl, token: localToken, endpoint: 'categories', populateQuery: 'populate=*' }),
     fetchAllCollection({ baseUrl: localBaseUrl, token: localToken, endpoint: 'writers', populateQuery: 'populate=*' }),
     fetchAllCollection({ baseUrl: localBaseUrl, token: localToken, endpoint: 'articles', populateQuery: 'populate=*' }),
+    fetchAllCollection({ baseUrl: localBaseUrl, token: localToken, endpoint: 'ytvideos', populateQuery: 'populate=*' }),
   ]);
 
-  const categoryIdBySlug = new Map(localCategories.map((i) => [i?.attributes?.slug, i?.id]));
-  const writerIdByEmail = new Map(localWriters.map((i) => [i?.attributes?.email, i?.id]));
-  const writerIdByName = new Map(localWriters.map((i) => [i?.attributes?.name, i?.id]));
+  const categoryIdBySlug = new Map(localCategories.map((i) => [getAttrs(i).slug, i?.id]));
+  const writerIdByEmail = new Map(localWriters.map((i) => [getAttrs(i).email, i?.id]));
+  const writerIdByName = new Map(localWriters.map((i) => [getAttrs(i).name, i?.id]));
 
   const categoryCounters = { created: 0, updated: 0 };
   await upsertCollectionByKey({
@@ -316,7 +370,7 @@ async function main() {
   if (!dryRun) {
     const fresh = await fetchAllCollection({ baseUrl: localBaseUrl, token: localToken, endpoint: 'categories', populateQuery: 'populate=*' });
     categoryIdBySlug.clear();
-    for (const item of fresh) categoryIdBySlug.set(item?.attributes?.slug, item?.id);
+    for (const item of fresh) categoryIdBySlug.set(getAttrs(item).slug, item?.id);
   }
 
   const writerCounters = { created: 0, updated: 0 };
@@ -324,7 +378,7 @@ async function main() {
     endpoint: 'writers',
     keyName: 'email',
     getRemoteKey: (item) => item?.attributes?.email || item?.attributes?.name,
-    getLocalKey: (item) => item?.attributes?.email || item?.attributes?.name,
+    getLocalKey: (item) => getAttrs(item).email || getAttrs(item).name,
     remoteItems: remoteWriters,
     localItems: localWriters,
     localBaseUrl,
@@ -355,8 +409,9 @@ async function main() {
     writerIdByEmail.clear();
     writerIdByName.clear();
     for (const item of fresh) {
-      if (item?.attributes?.email) writerIdByEmail.set(item.attributes.email, item.id);
-      if (item?.attributes?.name) writerIdByName.set(item.attributes.name, item.id);
+      const a = getAttrs(item);
+      if (a.email) writerIdByEmail.set(a.email, item.id);
+      if (a.name) writerIdByName.set(a.name, item.id);
     }
   }
 
@@ -449,7 +504,10 @@ async function main() {
       const attrs = remote.attributes || {};
       const authorEmail = attrs?.author?.data?.attributes?.email;
       const authorName = attrs?.author?.data?.attributes?.name;
-      const categorySlugs = ensureArray(attrs?.categories?.data).map((c) => c?.attributes?.slug).filter(Boolean);
+      const categorySlugs = [
+        ...relationItems(attrs?.categories).map((c) => c?.attributes?.slug).filter(Boolean),
+        ...relationItems(attrs?.category).map((c) => c?.attributes?.slug).filter(Boolean),
+      ];
 
       const localCategoryIds = categorySlugs
         .map((slug) => categoryIdBySlug.get(slug))
@@ -523,10 +581,45 @@ async function main() {
     },
   });
 
+  const ytVideoCounters = { created: 0, updated: 0 };
+  await upsertCollectionByKey({
+    endpoint: 'ytvideos',
+    keyName: 'youtubeUrl',
+    getRemoteKey: (item) => {
+      const attrs = item?.attributes || {};
+      return attrs.youtubeVideoId || attrs.youtubeUrl || attrs.Link || attrs.title;
+    },
+    getLocalKey: (item) => {
+      const attrs = getAttrs(item);
+      return attrs.youtubeVideoId || attrs.youtubeUrl || attrs.Link || attrs.title;
+    },
+    remoteItems: remoteYtVideos,
+    localItems: localYtVideos,
+    localBaseUrl,
+    localToken,
+    dryRun,
+    counters: ytVideoCounters,
+    toLocalPayload: async (remote) => {
+      const attrs = remote.attributes || {};
+
+      return {
+        title: attrs.title,
+        youtubeUrl: attrs.youtubeUrl || attrs.Link,
+        youtubeVideoId: attrs.youtubeVideoId || null,
+        thumbnailUrl: attrs.thumbnailUrl || null,
+        isFeatured: Boolean(attrs.isFeatured),
+        sortOrder: Number.isInteger(attrs.sortOrder) ? attrs.sortOrder : 0,
+        Link: attrs.Link || attrs.youtubeUrl || null,
+        publishedAt: attrs.publishedAt || null,
+      };
+    },
+  });
+
   console.log('\nDone. Summary:');
   console.log(`- categories: created ${categoryCounters.created}, updated ${categoryCounters.updated}`);
   console.log(`- writers: created ${writerCounters.created}, updated ${writerCounters.updated}`);
   console.log(`- articles: created ${articleCounters.created}, updated ${articleCounters.updated}`);
+  console.log(`- ytvideos: created ${ytVideoCounters.created}, updated ${ytVideoCounters.updated}`);
   console.log(`- single types: global + homepage ${dryRun ? 'previewed' : 'updated'}`);
 }
 

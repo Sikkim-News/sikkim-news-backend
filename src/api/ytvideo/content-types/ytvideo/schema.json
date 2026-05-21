@@ -1,0 +1,40 @@
+{
+  "kind": "collectionType",
+  "collectionName": "ytvideos",
+  "info": {
+    "singularName": "ytvideo",
+    "pluralName": "ytvideos",
+    "displayName": "Homepage Video"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "youtubeUrl": {
+      "type": "string",
+      "required": true
+    },
+    "youtubeVideoId": {
+      "type": "string"
+    },
+    "thumbnailUrl": {
+      "type": "string"
+    },
+    "isFeatured": {
+      "type": "boolean",
+      "default": false
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "Link": {
+      "type": "string"
+    }
+  }
+}

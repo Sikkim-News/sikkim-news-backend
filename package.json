@@ -1,10 +1,9 @@
 {
   "dependencies": {
-    "@strapi/plugin-graphql": "^4.0.0",
-    "@strapi/plugin-i18n": "4.25.19",
-    "@strapi/plugin-users-permissions": "4.25.19",
-    "@strapi/provider-upload-cloudinary": "^4.9.1",
-    "@strapi/strapi": "4.25.19",
+    "@strapi/plugin-graphql": "^5.8.1",
+    "@strapi/plugin-users-permissions": "5.8.0",
+    "@strapi/provider-upload-cloudinary": "^4.25.20",
+    "@strapi/strapi": "5.8.0",
     "better-sqlite3": "11.8.1",
     "lodash.set": "^4.3.2",
     "mime-types": "^2.1.27",
@@ -24,7 +23,9 @@
     "start": "strapi start",
     "build": "strapi build",
     "strapi": "strapi",
-    "sync:prod": "node scripts/sync-from-prod.js"
+    "seed:import": "node scripts/import-seed.js",
+    "sync:prod": "node scripts/sync-from-prod.js",
+    "sync:sikkim": "node scripts/sync-from-prod.js --prod-url https://sikkim-news-backend-p6i7o.ondigitalocean.app"
   },
   "author": {
     "name": "A Strapi developer"
@@ -34,7 +35,7 @@
     "template": "@strapi/template-blog@1.0.0"
   },
   "engines": {
-    "node": ">=14.19.1 <=18.x.x",
+    "node": ">=18.0.0 <=22.x.x",
     "npm": ">=6.0.0"
   },
   "license": "MIT"
