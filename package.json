@@ -39,7 +39,8 @@
     "npm": ">=6.0.0"
   },
   "optionalDependencies": {
-    "@swc/core-linux-x64-gnu": "1.10.9"
+    "@swc/core-linux-x64-gnu": "1.10.9",
+    "@rollup/rollup-linux-x64-gnu": "4.32.0"
   },
   "license": "MIT"
 }
